@@ -1,0 +1,644 @@
+/* src/components/lottery/DrawLottery.css */
+.draw-lottery-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 500px;
+  overflow: hidden;
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+.draw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background-color: #1a73e8;
+  background-image: linear-gradient(135deg, #1a73e8 0%, #3a8aff 100%);
+  color: white;
+}
+
+.draw-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.close-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.draw-intro {
+  padding: 2rem;
+  text-align: center;
+}
+
+.draw-intro p {
+  margin-bottom: 1.5rem;
+  color: #555;
+}
+
+.lottery-summary {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.summary-item:last-child {
+  margin-bottom: 0;
+}
+
+.summary-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-weight: 600;
+  color: #1a73e8;
+}
+
+.draw-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.no-tickets-message {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+/* Drawing animation styles */
+.draw-animation {
+  padding: 2rem;
+  text-align: center;
+  min-height: 350px;
+}
+
+.drawing-stage {
+  animation: fadeIn 0.5s ease-out;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.animation-stage-label {
+  color: #1a73e8;
+  font-weight: 500;
+  margin: 1rem 0;
+  font-size: 1.1rem;
+  animation: pulse 2s infinite alternate;
+}
+
+/* Countdown animation styles */
+.countdown-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.countdown-label {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: #666;
+}
+
+.countdown-value {
+  font-size: 6rem;
+  font-weight: 700;
+  color: #1a73e8;
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid #1a73e8;
+  border-radius: 50%;
+  margin-bottom: 2rem;
+  animation: pulseCountdown 1s infinite alternate;
+}
+
+.countdown-progress {
+  width: 80%;
+  height: 10px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.countdown-progress-fill {
+  height: 100%;
+  background-color: #1a73e8;
+  background-image: linear-gradient(90deg, #1a73e8, #3a8aff);
+}
+
+/* Character countdown styles - Enhanced */
+.character-countdown {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #f44336;
+  color: white;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
+  z-index: 10;
+  animation: pulseCountdown 0.8s infinite alternate;
+}
+
+.countdown-number {
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+/* Ticket ID container and character boxes */
+.ticket-id-container {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 2rem 0;
+  min-height: 80px;
+  position: relative;
+  padding-top: 50px; /* Space for the countdown */
+}
+
+.char-box {
+  width: 40px;
+  height: 50px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #aaa;
+  background-color: #f8f9fa;
+  position: relative;
+  transition: transform 0.5s, color 0.5s, border-color 0.5s, background-color 0.5s;
+}
+
+.char-box.revealed {
+  color: #1a73e8;
+  border-color: #1a73e8;
+  background-color: #e8f0fe;
+  transform: scale(1);
+}
+
+.char-box.animating {
+  color: #ffc107;
+  border-color: #ffc107;
+  background-color: #fff8e1;
+  animation: charReveal 3s ease-out;
+  position: relative;
+  overflow: visible;
+}
+
+.char-box.first-hidden {
+  color: #ff9800;
+  border-color: #ff9800;
+  background-color: #fff3e0;
+  animation: firstHiddenReveal 7s ease-out;
+}
+
+.char-box.final-hidden {
+  color: #28a745;
+  border-color: #28a745;
+  background-color: #e8f5e9;
+  animation: finalReveal 7s ease-out;
+}
+
+/* Reshuffle animation styles */
+.reshuffle-container {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  margin: 2rem 0;
+}
+
+.reshuffle-char {
+  position: absolute;
+  width: 40px;
+  height: 50px;
+  border: 2px solid #1a73e8;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #1a73e8;
+  background-color: #e8f0fe;
+  animation: reshuffleMove 7s ease-in-out;
+  will-change: transform;
+}
+
+/* Prize display styles */
+.current-prize {
+  margin-bottom: 1rem;
+  background-color: #f0f8ff;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #1a73e8;
+}
+
+.current-prize h3 {
+  color: #1a73e8;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.prize-value {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* Winner result styles */
+.draw-result {
+  text-align: center;
+  animation: fadeIn 0.8s ease-out;
+  padding: 0 1rem 2rem;
+}
+
+.draw-result h3 {
+  color: #28a745;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+}
+
+.winner-details {
+  background-color: #f8f9fa;
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.winner-details:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background-image: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.winner-prize {
+  background-color: #e8f5e9;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.prize-label {
+  font-size: 0.9rem;
+  color: #28a745;
+  margin-bottom: 0.25rem;
+}
+
+.ticket-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.ticket-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1a73e8;
+  letter-spacing: 1px;
+}
+
+.winner-ticket-number {
+  font-weight: 600;
+  color: #666;
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.winner-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.4rem 0;
+  color: #333;
+}
+
+.winner-game-id {
+  color: #6c757d;
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.winner-contact {
+  color: #6c757d;
+  font-size: 0.9rem;
+  margin: 0.4rem 0;
+}
+
+/* Error message */
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 1rem 2rem;
+  text-align: center;
+}
+
+/* Results close button */
+.results-close-button {
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 1.5rem;
+}
+
+.results-close-button:hover {
+  background-color: #1557b0;
+}
+
+/* Prizes list */
+.prizes-list {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.prizes-list h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.prize-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.prize-item:last-child {
+  border-bottom: none;
+}
+
+.prize-name {
+  font-weight: 500;
+  color: #555;
+}
+
+/* Draw info box */
+.draw-info-box {
+  background-color: #e8f0fe;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid #1a73e8;
+}
+
+.draw-info-box h4 {
+  color: #1a73e8;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.draw-info-box p {
+  margin: 0.5rem 0;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulseCountdown {
+  from {
+    transform: scale(1) translateX(-50%);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+  to {
+    transform: scale(1.1) translateX(-45%);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@keyframes charReveal {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes firstHiddenReveal {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  20% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.1);
+  }
+  60% {
+    transform: scale(1);
+  }
+  80% {
+    transform: rotate(5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes reshuffleMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(40px, -30px) rotate(180deg);
+  }
+  40% {
+    transform: translate(-60px, 30px) rotate(360deg);
+  }
+  60% {
+    transform: translate(30px, -20px) rotate(540deg);
+  }
+  80% {
+    transform: translate(-20px, 10px) rotate(720deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes finalReveal {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+    background-color: #ffc107;
+  }
+  20% {
+    transform: scale(1.4);
+    opacity: 1;
+    background-color: #ffc107;
+  }
+  40% {
+    transform: scale(0.9);
+    background-color: #e8f5e9;
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  80% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+  .modal-content {
+    width: 95%;
+  }
+  
+  .draw-header {
+    padding: 1rem;
+  }
+  
+  .draw-intro, 
+  .draw-animation,
+  .no-tickets-message {
+    padding: 1.5rem;
+  }
+  
+  .draw-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .countdown-value {
+    font-size: 4rem;
+    width: 120px;
+    height: 120px;
+  }
+  
+  .char-box {
+    width: 32px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+  
+  .character-countdown {
+    top: -40px;
+    width: 40px;
+    height: 40px;
+  }
+  
+  .countdown-number {
+    font-size: 1.7rem;
+  }
+}
