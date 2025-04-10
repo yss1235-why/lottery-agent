@@ -9,21 +9,3 @@ yarn-debug.log*
 yarn-error.log*
 dist/
 build/
-
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-env/
-venv/
-.env
-*.sqlite3
-
-# Logs
-*.log
-
-# VSCode
-.vscode/
-
-# Secrets
-*.env
