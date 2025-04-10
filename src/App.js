@@ -1,24 +1,28 @@
-import logo from './logo.svg';
-import './App.css';
+// src/App.js
+import React from 'react';
+import { HashRouter as Router } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import AppRoutes from './routes';
+import './assets/styles/TabView.css';
+import './assets/styles/Tickets.css';
+import './assets/styles/Lotteries.css';
+import './assets/styles/Dashboard.css';
+import './assets/styles/Draw.css';
+import './assets/styles/DepositModal.css';
+import './assets/styles/Buttons.css';
+import './assets/styles/Login.css';
+import './assets/styles/LoadingSpinner.css';
+import './assets/styles/ImageUploader.css';
+import './assets/styles/additional.css';
+import './assets/styles/global.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </Router>
   );
 }
 

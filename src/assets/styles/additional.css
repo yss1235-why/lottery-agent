@@ -1,0 +1,52 @@
+/* src/assets/styles/additional.css */
+
+/* Prize total info section */
+.prize-total-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #f8f9fa;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  border: 1px solid #e0e0e0;
+}
+
+.prize-total-info span {
+  color: #1a73e8;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.prize-total-info button {
+  margin-left: 15px;
+}
+
+/* Better form field help text */
+.input-help {
+  color: #6c757d;
+  font-size: 0.8rem;
+  margin-top: 5px;
+  line-height: 1.2;
+}
+
+/* Form field error messages */
+.error-text {
+  color: #dc3545;
+  font-size: 0.8rem;
+  margin-top: 5px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .prize-total-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .prize-total-info button {
+    margin-left: 0;
+    width: 100%;
+  }
+}
