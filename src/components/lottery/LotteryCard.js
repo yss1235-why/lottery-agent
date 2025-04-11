@@ -11,6 +11,26 @@ const LotteryCard = ({ lottery, isSelected = false, isExpanded = false }) => {
     ? (lottery.ticketsBooked / lottery.ticketCapacity) * 100
     : 0;
 
+  // Get status class for styling
+  const getStatusClass = () => {
+    switch (lottery.status) {
+      case 'active':
+        return 'status-active';
+      case 'upcoming':
+        return 'status-upcoming';
+      case 'drawing':
+        return 'status-drawing';
+      case 'completed':
+        return 'status-completed';
+      case 'cancelled':
+        return 'status-cancelled';
+      case 'deleted':
+        return 'status-deleted';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className={`lottery-card ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''} ${lottery.status}`}>
       {lottery.image && (
@@ -21,8 +41,8 @@ const LotteryCard = ({ lottery, isSelected = false, isExpanded = false }) => {
       
       <div className="lottery-header">
         <h3>{lottery.name || `Lottery #${lottery.id}`}</h3>
-        <span className={`status-badge ${lottery.status}`}>
-          {lottery.status.charAt(0).toUpperCase() + lottery.status.slice(1)}
+        <span className={`status-badge ${getStatusClass()}`}>
+          {lottery.status === 'drawing' ? 'Drawing' : lottery.status.charAt(0).toUpperCase() + lottery.status.slice(1)}
         </span>
       </div>
       
@@ -67,7 +87,7 @@ const LotteryCard = ({ lottery, isSelected = false, isExpanded = false }) => {
           </span>
         </div>
         
-        {lottery.status === 'active' && (
+        {(lottery.status === 'active' || lottery.status === 'drawing') && (
           <div className="detail-row">
             <span className="detail-label">Remaining:</span>
             <span className="detail-value">{formatTimeRemaining(lottery.drawTime)}</span>
@@ -81,6 +101,14 @@ const LotteryCard = ({ lottery, isSelected = false, isExpanded = false }) => {
             className="progress-fill"
             style={{ width: `${progressPercentage}%` }}
           ></div>
+        </div>
+      )}
+      
+      {/* Drawing animation indicator */}
+      {lottery.status === 'drawing' && (
+        <div className="drawing-indicator">
+          <div className="drawing-pulse"></div>
+          <div className="drawing-text">Drawing in progress...</div>
         </div>
       )}
       
