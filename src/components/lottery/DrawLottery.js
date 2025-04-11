@@ -6,7 +6,7 @@ import Button from '../common/Button';
 import Loading from '../common/Loading';
 import './DrawLottery.css';
 
-const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
+export const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drawInProgress, setDrawInProgress] = useState(false);
@@ -53,6 +53,38 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     revealedChars: [],
     active: false
   });
+
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        // Ensure lottery exists and has an id
+        if (!lottery || !lottery.id) {
+          setError('Invalid lottery information');
+          setLoading(false);
+          return;
+        }
+        
+        const ticketsData = await getLotteryTickets(lottery.id);
+        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
+        setTickets(activeTickets);
+        setAvailableTickets(activeTickets);
+      } catch (error) {
+        console.error('Error fetching tickets:', error);
+        setError('Failed to load tickets for this lottery');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTickets();
+    
+    return () => {
+      // Clear any existing timers on unmount
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (characterTimerRef.current) clearTimeout(characterTimerRef.current);
+      animationStateRef.current.active = false;
+    };
+  }, [lottery]);
 
   // Generate a randomized reveal sequence for all characters
   const generateRevealSequence = useCallback((ticketId) => {
@@ -105,7 +137,13 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       if (nextPrizeIndex >= 0 && lottery.prizes && lottery.prizes[nextPrizeIndex]) {
         // Reset animation for next prize
         setTimeout(() => {
-          startPrizeDraw(nextPrizeIndex);
+          const success = startPrizeDraw(nextPrizeIndex);
+          if (!success) {
+            // If no more tickets available, complete the process
+            setFinalReveal(true);
+            setAnimationPhase('complete');
+            setShowResult(true);
+          }
         }, 2000); // Pause between prizes
       } else {
         // No more prizes to draw
@@ -114,7 +152,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
         setShowResult(true);
       }
     }, timings.finalRevealPause);
-  }, [currentPrizeIndex, lottery.prizes, timings.finalRevealPause]);
+  }, [lottery.prizes, currentPrizeIndex, timings.finalRevealPause]);
 
   // The main character reveal animation driver
   const animateCharacterReveals = useCallback(() => {
@@ -236,40 +274,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     }, 500);
     
     return true;
-  }, [availableTickets, generateRevealSequence, animateCharacterReveals, lottery.prizes]);
-
-  // Fetch tickets when component mounts
-  useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        // Ensure lottery exists and has an id
-        if (!lottery || !lottery.id) {
-          setError('Invalid lottery information');
-          setLoading(false);
-          return;
-        }
-        
-        const ticketsData = await getLotteryTickets(lottery.id);
-        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
-        setTickets(activeTickets);
-        setAvailableTickets(activeTickets);
-      } catch (error) {
-        console.error('Error fetching tickets:', error);
-        setError('Failed to load tickets for this lottery');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchTickets();
-    
-    return () => {
-      // Clear any existing timers on unmount
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (characterTimerRef.current) clearTimeout(characterTimerRef.current);
-      animationStateRef.current.active = false;
-    };
-  }, [lottery]);
+  }, [availableTickets, lottery.prizes, generateRevealSequence, animateCharacterReveals]);
 
   // Handle countdown animation
   useEffect(() => {
@@ -291,34 +296,6 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       }
     }
   }, [showCountdown, countdownValue, lottery, startPrizeDraw]);
-
-  // Complete the drawing process
-  const completeDrawProcess = useCallback(async (winningTickets) => {
-    if (!lottery || !lottery.id || winningTickets.length === 0) {
-      setError('Invalid lottery or no winners selected');
-      return;
-    }
-    
-    try {
-      // Extract ticket IDs
-      const winningTicketIds = winningTickets.map(ticket => ticket.id);
-      
-      // Save the draw results to the database
-      await drawLottery(lottery.id, winningTicketIds);
-      
-      // No auto-close - require manual closing
-    } catch (error) {
-      console.error('Error completing draw:', error);
-      setError('Failed to record the lottery draw. The winners have been selected, but there was an error saving the results.');
-    }
-  }, [lottery]);
-  
-  // Effect to handle draw completion
-  useEffect(() => {
-    if (animationPhase === 'complete' && finalReveal && selectedTickets.length > 0) {
-      completeDrawProcess(selectedTickets);
-    }
-  }, [animationPhase, finalReveal, selectedTickets, completeDrawProcess]);
 
   // Main draw function
   const startDraw = async () => {
@@ -361,6 +338,34 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     // Start the countdown animation
     setShowCountdown(true);
     setCountdownValue(3);
+  };
+
+  // Complete the drawing process and update database
+  useEffect(() => {
+    if (animationPhase === 'complete' && finalReveal && selectedTickets.length > 0) {
+      completeDrawProcess(selectedTickets);
+    }
+  }, [animationPhase, finalReveal, selectedTickets, completeDrawProcess]);
+
+  const completeDrawProcess = async (winningTickets) => {
+    if (!lottery || !lottery.id || winningTickets.length === 0) {
+      setError('Invalid lottery or no winners selected');
+      return;
+    }
+    
+    try {
+      // Extract ticket IDs
+      const winningTicketIds = winningTickets.map(ticket => ticket.id);
+      
+      // Save the draw results to the database
+      // This will update the status from "drawing" to "completed"
+      await drawLottery(lottery.id, winningTicketIds);
+      
+      // No auto-close - require manual closing
+    } catch (error) {
+      console.error('Error completing draw:', error);
+      setError('Failed to record the lottery draw. The winners have been selected, but there was an error saving the results.');
+    }
   };
 
   // Function to display the characters during the draw
@@ -447,4 +452,184 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
   const renderWinners = () => {
     if (!selectedTickets || selectedTickets.length === 0) return null;
     
-    // Sort winners by
+    // Sort winners by prize index (ascending - bigger prizes first)
+    const sortedWinners = [...selectedTickets].sort((a, b) => a.prizeIndex - b.prizeIndex);
+    
+    return (
+      <div className="winners-list">
+        <h3>🏆 Winners Announced! 🏆</h3>
+        {sortedWinners.map((winner, index) => (
+          <div key={index} className="winner-details">
+            <div className="winner-prize">
+              <div className="prize-label">{winner.prizeName}</div>
+              <div className="prize-value">
+                {typeof winner.prizeValue === 'number' ? `₹${winner.prizeValue}` : winner.prizeValue}
+              </div>
+            </div>
+            <div className="winner-ticket-id">
+              <div className="ticket-label">Winning Ticket ID</div>
+              <div className="ticket-value">{winner.id}</div>
+            </div>
+            <p className="winner-ticket-number">Ticket #{winner.number}</p>
+            <p className="winner-name">Player: {winner.playerName}</p>
+            {winner.gameId && (
+              <p className="winner-game-id">Game ID: {winner.gameId}</p>
+            )}
+            <p className="winner-contact">Contact: {winner.phoneNumber}</p>
+          </div>
+        ))}
+        
+        {/* Add close button */}
+        <button className="results-close-button" onClick={onDrawComplete}>
+          Close
+        </button>
+      </div>
+    );
+  };
+
+  // Render the current prize being drawn
+  const renderCurrentPrize = () => {
+    if (currentPrizeIndex === -1 || !lottery || !lottery.prizes) return null;
+    
+    // Guard against invalid prize index
+    if (currentPrizeIndex >= lottery.prizes.length) return null;
+    
+    const prize = lottery.prizes[currentPrizeIndex];
+    return (
+      <div className="current-prize">
+        <h3>Drawing: {prize.name}</h3>
+        <div className="prize-value">{typeof prize.value === 'number' ? `₹${prize.value}` : prize.value}</div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="draw-lottery-modal">
+        <div className="modal-content">
+          <div className="draw-header">
+            <h2>Loading Lottery</h2>
+          </div>
+          <div className="modal-body">
+            <Loading message="Loading tickets..." />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Guard against null lottery object
+  if (!lottery) {
+    return (
+      <div className="draw-lottery-modal">
+        <div className="modal-content">
+          <div className="draw-header">
+            <h2>Invalid Lottery</h2>
+            <button className="close-button" onClick={onClose}>&times;</button>
+          </div>
+          <div className="modal-body">
+            <div className="error-message">Invalid lottery data provided</div>
+            <div className="draw-actions">
+              <Button onClick={onClose} variant="primary">Close</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="draw-lottery-modal">
+      <div className="modal-content">
+        <div className="draw-header">
+          <h2>Draw: {lottery.name || `Lottery #${lottery.id}`}</h2>
+          {!drawInProgress && (
+            <button className="close-button" onClick={onClose}>&times;</button>
+          )}
+        </div>
+        
+        <div className="modal-body">
+          {error && <div className="error-message">{error}</div>}
+          
+          {tickets.length === 0 ? (
+            <div className="no-tickets-message">
+              <p>No tickets available for drawing.</p>
+              <Button onClick={onClose} variant="primary">Close</Button>
+            </div>
+          ) : drawInProgress ? (
+            <div className="draw-animation">
+              {showCountdown ? (
+                // Countdown animation before draw starts
+                renderCountdown()
+              ) : !showResult ? (
+                <div className="drawing-stage">
+                  {renderCurrentPrize()}
+                  {renderAnimationStageLabel()}
+                  
+                  <div className="ticket-id-container">
+                    {renderDrawingChars()}
+                    {renderCharacterCountdown()}
+                  </div>
+                </div>
+              ) : (
+                <div className="draw-result">
+                  {renderWinners()}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="draw-intro">
+              <p>Ready to draw winners for this lottery?</p>
+              <div className="lottery-summary">
+                <div className="summary-item">
+                  <span className="summary-label">Prize Pool:</span>
+                  <span className="summary-value">₹{lottery.prizePool.toLocaleString()}</span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">Total Tickets:</span>
+                  <span className="summary-value">{tickets.length}</span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">Number of Prizes:</span>
+                  <span className="summary-value">{lottery.prizes ? lottery.prizes.length : 0}</span>
+                </div>
+              </div>
+              
+              {lottery.prizes && (
+                <div className="prizes-list">
+                  <h4>Prizes to be Drawn:</h4>
+                  {lottery.prizes.map((prize, index) => (
+                    <div key={index} className="prize-item">
+                      <span className="prize-name">{prize.name}</span>
+                      <span className="prize-value">
+                        {typeof prize.value === 'number' ? `₹${prize.value.toLocaleString()}` : prize.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="draw-info-box">
+                <h4>Draw Information</h4>
+                <p>Each character will be revealed randomly with a 3-second countdown</p>
+                <p>All characters will be revealed one-by-one in random order</p>
+                <p>Prizes will be drawn in sequence, starting with the highest prize</p>
+              </div>
+              
+              <div className="draw-actions">
+                <Button onClick={startDraw} variant="primary">
+                  Start Drawing
+                </Button>
+                <Button onClick={onClose} variant="outline">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DrawLottery;
