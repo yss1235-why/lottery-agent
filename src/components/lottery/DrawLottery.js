@@ -57,7 +57,8 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     currentIndex: 0,
     active: false,
     currentCharIndex: 0,
-    ticket: null
+    ticket: null,
+    currentDrawIndex: -1 // Store the current draw index here as well
   });
 
   // Fetch tickets when component mounts
@@ -162,8 +163,13 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     }
     
     console.log(`Starting prize reveal sequence with ${preSelectedWinners.length} winners`);
-    setCurrentDrawIndex(0);
-    revealNextPrize(0);
+    // Store the initial draw index in both state and ref
+    const initialIndex = 0;
+    setCurrentDrawIndex(initialIndex);
+    // Also store in the ref for immediate access
+    animationStateRef.current.currentDrawIndex = initialIndex;
+    
+    revealNextPrize(initialIndex);
   }, [preSelectedWinners]);
 
   // Reveal the next prize in the sequence
@@ -208,7 +214,8 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       currentIndex: 0,
       active: true,
       currentCharIndex: 0,
-      ticket: ticket
+      ticket: ticket,
+      currentDrawIndex: index // Store the current draw index in the ref
     };
     
     // Start character reveal
@@ -285,15 +292,21 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
 
   // Finish revealing the current prize and prepare for the next one
   const finishPrizeReveal = useCallback(() => {
-    console.log(`Finishing prize reveal for draw index ${currentDrawIndex}`);
+    // Get the draw index from the animation state ref instead of using currentDrawIndex state
+    const drawIndex = animationStateRef.current.currentDrawIndex;
     
-    if (currentDrawIndex < 0 || currentDrawIndex >= preSelectedWinners.length) {
-      console.error(`Invalid draw index: ${currentDrawIndex}`);
+    console.log(`Finishing prize reveal for draw index ${drawIndex}`);
+    
+    if (drawIndex < 0 || drawIndex >= preSelectedWinners.length) {
+      console.error(`Invalid draw index: ${drawIndex}`);
+      // Handle the error gracefully by moving to completion
+      setAnimationPhase('complete');
+      setShowResult(true);
       return;
     }
     
     // Get current winner
-    const currentWinner = preSelectedWinners[currentDrawIndex];
+    const currentWinner = preSelectedWinners[drawIndex];
     const ticket = currentWinner.ticket;
     
     console.log(`Adding winner to results: Ticket ${ticket.id} for prize ${currentWinner.prizeName}`);
@@ -324,12 +337,13 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     }
     
     drawSequenceTimerRef.current = setTimeout(() => {
-      const nextIndex = currentDrawIndex + 1;
+      const nextIndex = drawIndex + 1;
       console.log(`Moving to next prize at index ${nextIndex}`);
       
       if (nextIndex < preSelectedWinners.length) {
-        // Move to the next prize
+        // Move to the next prize - update both the React state and our ref
         setCurrentDrawIndex(nextIndex);
+        animationStateRef.current.currentDrawIndex = nextIndex;
         revealNextPrize(nextIndex);
       } else {
         // End of prizes
@@ -338,7 +352,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
         setShowResult(true);
       }
     }, timings.betweenPrizes);
-  }, [currentDrawIndex, preSelectedWinners, revealNextPrize, timings.betweenPrizes]);
+  }, [preSelectedWinners, timings.betweenPrizes]);
 
   // Handle countdown animation for draw start
   useEffect(() => {
@@ -420,6 +434,16 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     setError(null);
     setShowResult(false);
     setAnimationPhase('countdown');
+    
+    // Reset the animation state ref
+    animationStateRef.current = {
+      sequence: [],
+      currentIndex: 0,
+      active: false,
+      currentCharIndex: 0,
+      ticket: null,
+      currentDrawIndex: -1
+    };
     
     // Clear any existing timers
     if (timerRef.current) clearTimeout(timerRef.current);
