@@ -58,7 +58,8 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     active: false,
     currentCharIndex: 0,
     ticket: null,
-    currentDrawIndex: -1 // Store the current draw index here as well
+    currentDrawIndex: -1, // Store the current draw index here as well
+    preSelectedWinners: [] // Store pre-selected winners to avoid stale closures
   });
 
   // Fetch tickets when component mounts
@@ -95,10 +96,11 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
   // Pre-select all winners at the start of the draw
   const preSelectAllWinners = useCallback(() => {
     if (!lottery || !lottery.prizes || !tickets || tickets.length === 0) {
+      console.error("Cannot select winners: invalid lottery data or no tickets");
       return false;
     }
     
-    console.log(`Pre-selecting winners for ${lottery.prizes.length} prizes`);
+    console.log(`Pre-selecting winners for ${lottery.prizes.length} prizes from ${tickets.length} tickets`);
     
     // Create a copy of tickets to work with
     const availableTickets = [...tickets];
@@ -107,11 +109,19 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     // Select winners for each prize, starting from the last prize (highest index)
     for (let i = lottery.prizes.length - 1; i >= 0; i--) {
       // Stop if no more tickets are available
-      if (availableTickets.length === 0) break;
+      if (availableTickets.length === 0) {
+        console.warn(`Ran out of tickets after selecting ${selectedWinners.length} winners`);
+        break;
+      }
       
       // Randomly select a ticket
       const randomIndex = Math.floor(Math.random() * availableTickets.length);
       const selectedTicket = availableTickets[randomIndex];
+      
+      if (!selectedTicket || !selectedTicket.id) {
+        console.error(`Invalid ticket selected at index ${randomIndex}`);
+        continue;
+      }
       
       // Remove the selected ticket from available tickets
       availableTickets.splice(randomIndex, 1);
@@ -130,8 +140,14 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     // Sort winners by prize index (descending, so highest prize is first)
     selectedWinners.sort((a, b) => b.prizeIndex - a.prizeIndex);
     
-    // Set the pre-selected winners
+    console.log(`Final selected winners count: ${selectedWinners.length}`);
+    
+    // Set the pre-selected winners - use a callback to ensure we're using the latest state
     setPreSelectedWinners(selectedWinners);
+    
+    // Also store in a ref to avoid stale closure issues
+    animationStateRef.current.preSelectedWinners = selectedWinners;
+    
     return selectedWinners.length > 0;
   }, [lottery, tickets]);
 
@@ -154,15 +170,20 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
 
   // Start the prize reveal sequence
   const startPrizeRevealSequence = useCallback(() => {
+    // Use winners from both state and ref to ensure we have the latest
+    const winners = preSelectedWinners.length > 0 ? 
+                   preSelectedWinners : 
+                   animationStateRef.current.preSelectedWinners;
+    
     // Begin with the first winner in the pre-selected list (highest prize)
-    if (preSelectedWinners.length === 0) {
-      console.error("No pre-selected winners available");
+    if (!winners || winners.length === 0) {
+      console.error("No pre-selected winners available for prize reveal sequence");
       setAnimationPhase('complete');
       setShowResult(true);
       return;
     }
     
-    console.log(`Starting prize reveal sequence with ${preSelectedWinners.length} winners`);
+    console.log(`Starting prize reveal sequence with ${winners.length} winners`);
     // Store the initial draw index in both state and ref
     const initialIndex = 0;
     setCurrentDrawIndex(initialIndex);
@@ -174,15 +195,30 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
 
   // Reveal the next prize in the sequence
   const revealNextPrize = useCallback((index) => {
+    // Use the winners from both state and ref to ensure we have the latest
+    const winners = preSelectedWinners.length > 0 ? 
+                   preSelectedWinners : 
+                   animationStateRef.current.preSelectedWinners;
+    
+    console.log(`Starting to reveal prize at index ${index}, total winners: ${winners.length}`);
+    
     // Check if we've reached the end of the winners
-    if (index >= preSelectedWinners.length) {
+    if (index >= winners.length) {
       console.log("All prizes revealed, showing final results");
       setAnimationPhase('complete');
       setShowResult(true);
       return;
     }
     
-    const currentWinner = preSelectedWinners[index];
+    const currentWinner = winners[index];
+    
+    if (!currentWinner || !currentWinner.ticket) {
+      console.error(`Invalid winner at index ${index}`);
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
+    }
+    
     const ticket = currentWinner.ticket;
     const prizeIndex = currentWinner.prizeIndex;
     
@@ -292,13 +328,32 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
 
   // Finish revealing the current prize and prepare for the next one
   const finishPrizeReveal = useCallback(() => {
+    // Safety check to prevent function from running after component unmounts
+    if (!animationStateRef.current.active) {
+      console.log("Animation is no longer active, skipping finishPrizeReveal");
+      return;
+    }
     // Get the draw index from the animation state ref instead of using currentDrawIndex state
     const drawIndex = animationStateRef.current.currentDrawIndex;
     
-    console.log(`Finishing prize reveal for draw index ${drawIndex}`);
+    // Use winners from both state and ref to ensure we have the latest
+    const winners = preSelectedWinners.length > 0 ? 
+                   preSelectedWinners : 
+                   animationStateRef.current.preSelectedWinners;
     
-    if (drawIndex < 0 || drawIndex >= preSelectedWinners.length) {
-      console.error(`Invalid draw index: ${drawIndex}`);
+    console.log(`Finishing prize reveal for draw index ${drawIndex}`);
+    console.log(`Current preSelectedWinners length: ${winners.length}`);
+    
+    // Guard against empty winners array
+    if (!winners || winners.length === 0) {
+      console.error(`No winners available - cannot finish prize reveal`);
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
+    }
+    
+    if (drawIndex < 0 || drawIndex >= winners.length) {
+      console.error(`Invalid draw index: ${drawIndex}, winners length: ${winners.length}`);
       // Handle the error gracefully by moving to completion
       setAnimationPhase('complete');
       setShowResult(true);
@@ -352,7 +407,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
         setShowResult(true);
       }
     }, timings.betweenPrizes);
-  }, [preSelectedWinners, timings.betweenPrizes]);
+  }, [preSelectedWinners, timings.betweenPrizes, revealNextPrize]);
 
   // Handle countdown animation for draw start
   useEffect(() => {
@@ -442,7 +497,8 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       active: false,
       currentCharIndex: 0,
       ticket: null,
-      currentDrawIndex: -1
+      currentDrawIndex: -1,
+      preSelectedWinners: []
     };
     
     // Clear any existing timers
