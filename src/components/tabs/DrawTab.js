@@ -19,10 +19,6 @@ const DrawTab = () => {
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [ticketCounts, setTicketCounts] = useState({});
 
-  useEffect(() => {
-    fetchLotteries();
-  }, [currentUser]);
-
   const fetchLotteries = async () => {
     if (!currentUser) return;
     
@@ -30,10 +26,15 @@ const DrawTab = () => {
     try {
       // Only get active lotteries that can be drawn
       const lotteriesData = await getAgentLotteries(currentUser.uid, 'active');
-      setLotteries(lotteriesData);
+      
+      // Filter out any lotteries that might be in drawing state already
+      // This is to prevent multiple drawing attempts on the same lottery
+      const drawableLotteries = lotteriesData.filter(lottery => lottery.status !== 'drawing');
+      
+      setLotteries(drawableLotteries);
       
       // Get ticket counts for each lottery
-      const countsPromises = lotteriesData.map(async lottery => {
+      const countsPromises = drawableLotteries.map(async lottery => {
         const tickets = await getLotteryTickets(lottery.id);
         const bookedTickets = tickets.filter(ticket => ticket.booked);
         return { lotteryId: lottery.id, count: bookedTickets.length };
@@ -53,6 +54,10 @@ const DrawTab = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchLotteries();
+  }, [currentUser]);
 
   const handleDrawClick = (lottery) => {
     setSelectedLottery(lottery);
