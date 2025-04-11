@@ -1,26 +1,4 @@
-// Fetch tickets when component mounts
-  useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        if (!lottery || !lottery.id) {
-          setError('Invalid lottery information');
-          setLoading(false);
-          return;
-        }
-        
-        const ticketsData = await getLotteryTickets(lottery.id);
-        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
-        setTickets(activeTickets);
-      } catch (error) {
-        console.error('Error fetching tickets:', error);
-        setError('Failed to load tickets for this lottery');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchTickets();
-  }, [lottery]);// src/components/lottery/DrawLottery.js
+// src/components/lottery/DrawLottery.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { drawLottery, updateLotteryStatus } from '../../services/lotteryService';
 import { getLotteryTickets } from '../../services/ticketService';
@@ -83,6 +61,30 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     currentDrawIndex: -1, // Store the current draw index here as well
     preSelectedWinners: [] // Store pre-selected winners to avoid stale closures
   });
+
+  // Fetch tickets when component mounts
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        if (!lottery || !lottery.id) {
+          setError('Invalid lottery information');
+          setLoading(false);
+          return;
+        }
+        
+        const ticketsData = await getLotteryTickets(lottery.id);
+        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
+        setTickets(activeTickets);
+      } catch (error) {
+        console.error('Error fetching tickets:', error);
+        setError('Failed to load tickets for this lottery');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTickets();
+  }, [lottery]);
 
   // Clean up function that runs on unmount
   useEffect(() => {
@@ -255,7 +257,8 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       active: true,
       currentCharIndex: 0,
       ticket: ticket,
-      currentDrawIndex: index // Store the current draw index in the ref
+      currentDrawIndex: index, // Store the current draw index in the ref
+      preSelectedWinners: winners // Keep a copy of winners
     };
     
     // Start character reveal
@@ -337,6 +340,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       console.log("Animation is no longer active, skipping finishPrizeReveal");
       return;
     }
+    
     // Get the draw index from the animation state ref instead of using currentDrawIndex state
     const drawIndex = animationStateRef.current.currentDrawIndex;
     
