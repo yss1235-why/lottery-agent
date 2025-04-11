@@ -340,6 +340,12 @@
   color: white;
 }
 
+.status-badge.drawing {
+  background-color: #ff9800;
+  color: white;
+  animation: pulse 1.5s infinite alternate;
+}
+
 .lottery-details {
   padding: 12px;
   flex: 1;
@@ -453,6 +459,41 @@
 .winner-count {
   font-weight: 600;
   color: #28a745;
+}
+
+/* Drawing status styles */
+.drawing-indicator {
+  padding: 0.75rem;
+  text-align: center;
+  color: #ff9800;
+  font-weight: 500;
+  background-color: #fff8e1;
+  border-top: 1px solid #ffe0b2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.drawing-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ff9800;
+  animation: pulse 1.5s infinite alternate;
+}
+
+.drawing-text {
+  font-size: 0.9rem;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 /* Responsive adjustments */
