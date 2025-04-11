@@ -69,7 +69,7 @@ const LotteriesTab = () => {
 
   useEffect(() => {
     fetchLotteries();
-  }, [currentUser, fetchLotteries]);
+  }, [currentUser]);
 
   const toggleCreateForm = () => {
     setShowCreateForm(!showCreateForm);
@@ -235,4 +235,339 @@ const LotteriesTab = () => {
             </Button>
           ) : (
             <Button onClick={toggleCreateForm} variant="primary">
-              {showCreate
+              {showCreateForm ? 'Cancel' : 'Create Lottery'}
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {/* Create Form */}
+      {showCreateForm && !showEditForm && (
+        <Card className="create-lottery-form-container">
+          <CreateLotteryForm onSuccess={handleLotteryCreated} />
+        </Card>
+      )}
+      
+      {/* Edit Form */}
+      {showEditForm && selectedLottery && (
+        <Card className="edit-lottery-form-container">
+          <EditLotteryForm 
+            lotteryId={selectedLottery.id} 
+            onSuccess={handleLotteryUpdated} 
+            onCancel={cancelEdit} 
+          />
+        </Card>
+      )}
+
+      {/* Active Lotteries Section */}
+      {!showCreateForm && !showEditForm && (
+        <div className="lotteries-section">
+          <div className="section-header">
+            <h2>Active Lotteries</h2>
+            <div className="section-actions">
+              {selectedLottery && (
+                <div className="lottery-action-buttons">
+                  {selectedLottery.status === 'active' && (
+                    <>
+                      <Button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDrawLottery(selectedLottery);
+                        }} 
+                        variant="primary"
+                      >
+                        Draw Lottery
+                      </Button>
+                      <Button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditLottery(selectedLottery);
+                        }} 
+                        variant="primary"
+                      >
+                        Edit Lottery
+                      </Button>
+                    </>
+                  )}
+                  
+                  {(selectedLottery.status === 'active' || selectedLottery.status === 'drawing') && (
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancelLottery(selectedLottery);
+                      }} 
+                      variant="danger"
+                    >
+                      Cancel Lottery
+                    </Button>
+                  )}
+                  
+                  {selectedLottery.status === 'active' && selectedLottery.ticketsBooked === 0 && (
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteLottery(selectedLottery);
+                      }} 
+                      variant="danger"
+                    >
+                      Delete Lottery
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {activeLotteries.length > 0 ? (
+            <div className="lotteries-grid">
+              {activeLotteries.map(lottery => (
+                <div 
+                  key={lottery.id} 
+                  className={`lottery-container ${selectedLottery?.id === lottery.id ? 'selected' : ''}`}
+                  onClick={() => handleLotteryClick(lottery)}
+                >
+                  <LotteryCard 
+                    lottery={lottery} 
+                    isSelected={selectedLottery?.id === lottery.id}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Card className="empty-state">
+              <p>No active lotteries found. Create your first lottery to get started.</p>
+              {!showCreateForm && (
+                <Button onClick={toggleCreateForm} variant="primary">Create Lottery</Button>
+              )}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Completed Lotteries Section */}
+      {!showCreateForm && !showEditForm && (
+        <div className="lotteries-section completed-section">
+          <div 
+            className="section-header collapsible" 
+            onClick={toggleCompletedSection}
+          >
+            <h2>Completed & Deleted Lotteries</h2>
+            <div className="collapse-icon">
+              {showCompletedSection ? '▲' : '▼'}
+            </div>
+          </div>
+          
+          {showCompletedSection && (
+            completedLotteries.length > 0 ? (
+              <div className="completed-lotteries-container">
+                <div className="lotteries-grid">
+                  {completedLotteries.map(lottery => (
+                    <div key={lottery.id} className="completed-lottery-wrapper">
+                      <div 
+                        className={`lottery-container ${expandedLottery === lottery.id ? 'expanded' : ''}`}
+                        onClick={() => handleLotteryClick(lottery)}
+                      >
+                        <LotteryCard 
+                          lottery={lottery}
+                          isExpanded={expandedLottery === lottery.id}
+                        />
+                      </div>
+                      
+                      {/* Expanded lottery details */}
+                      {expandedLottery === lottery.id && (
+                        <div className="lottery-expanded-details">
+                          {lottery.status === 'completed' && (
+                            <div className="winner-details">
+                              <h3>Winner Information</h3>
+                              {lottery.winners && lottery.winners.length > 0 ? (
+                                // Multiple winners (new format)
+                                lottery.winners.map((winner, index) => (
+                                  <div key={index} className="winner-item">
+                                    <div className="detail-item">
+                                      <span className="detail-label">Prize:</span>
+                                      <span className="detail-value">{winner.prizeName}</span>
+                                    </div>
+                                    <div className="detail-item">
+                                      <span className="detail-label">Winner Name:</span>
+                                      <span className="detail-value">{winner.playerName}</span>
+                                    </div>
+                                    <div className="detail-item">
+                                      <span className="detail-label">Phone Number:</span>
+                                      <span className="detail-value">{winner.phoneNumber}</span>
+                                    </div>
+                                    {winner.gameId && (
+                                      <div className="detail-item">
+                                        <span className="detail-label">Game ID:</span>
+                                        <span className="detail-value">{winner.gameId}</span>
+                                      </div>
+                                    )}
+                                    <div className="detail-item">
+                                      <span className="detail-label">Ticket ID:</span>
+                                      <span className="detail-value">{winner.id}</span>
+                                    </div>
+                                    <div className="detail-item">
+                                      <span className="detail-label">Ticket Number:</span>
+                                      <span className="detail-value">#{winner.number}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : lottery.winner ? (
+                                // Single winner (old format for backward compatibility)
+                                <>
+                                  <div className="detail-item">
+                                    <span className="detail-label">Winner Name:</span>
+                                    <span className="detail-value">{lottery.winner.playerName}</span>
+                                  </div>
+                                  <div className="detail-item">
+                                    <span className="detail-label">Phone Number:</span>
+                                    <span className="detail-value">{lottery.winner.phoneNumber}</span>
+                                  </div>
+                                  {lottery.winner.gameId && (
+                                    <div className="detail-item">
+                                      <span className="detail-label">Game ID:</span>
+                                      <span className="detail-value">{lottery.winner.gameId}</span>
+                                    </div>
+                                  )}
+                                  <div className="detail-item">
+                                    <span className="detail-label">Draw Date:</span>
+                                    <span className="detail-value">
+                                      {new Date(lottery.completedAt).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <p>No winner information available</p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {lottery.status === 'deleted' && (
+                            <div className="deleted-lottery-details">
+                              <h3>Deleted Lottery Tickets</h3>
+                              {loadingTickets ? (
+                                <Loading message="Loading tickets..." />
+                              ) : selectedTickets.length > 0 ? (
+                                <div className="tickets-list">
+                                  <table className="tickets-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Ticket #</th>
+                                        <th>Player Name</th>
+                                        <th>Phone</th>
+                                        {selectedTickets.some(t => t.gameId) && <th>Game ID</th>}
+                                        <th>Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedTickets.map(ticket => (
+                                        <tr key={ticket.id}>
+                                          <td>{ticket.number}</td>
+                                          <td>{ticket.playerName}</td>
+                                          <td>{ticket.phoneNumber}</td>
+                                          {selectedTickets.some(t => t.gameId) && (
+                                            <td>{ticket.gameId || '-'}</td>
+                                          )}
+                                          <td>
+                                            <span className={`status-badge ${ticket.status}`}>
+                                              {ticket.status}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p>No tickets found for this lottery.</p>
+                              )}
+                              <div className="deletion-info">
+                                <div className="detail-item">
+                                  <span className="detail-label">Deleted On:</span>
+                                  <span className="detail-value">
+                                    {new Date(lottery.deletedAt).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {lottery.status === 'cancelled' && (
+                            <div className="cancelled-lottery-details">
+                              <h3>Cancelled Lottery Information</h3>
+                              <div className="detail-item">
+                                <span className="detail-label">Cancelled On:</span>
+                                <span className="detail-value">
+                                  {new Date(lottery.cancelledAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <p>This lottery was cancelled and all ticket bookings were refunded.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <Card className="empty-state">
+                <p>No completed or deleted lotteries found.</p>
+              </Card>
+            )
+          )}
+        </div>
+      )}
+      
+      {/* Modals */}
+      {showDrawModal && selectedLottery && (
+        <DrawLottery 
+          lottery={selectedLottery} 
+          onClose={() => setShowDrawModal(false)}
+          onDrawComplete={handleDrawComplete}
+        />
+      )}
+      
+      {showCancelModal && selectedLottery && (
+        <ConfirmDialog
+          title="Cancel Lottery"
+          message={
+            cancelSuccess 
+              ? "Lottery cancelled successfully!" 
+              : `Are you sure you want to cancel "${selectedLottery.name || `Lottery #${selectedLottery.id}`}"? This will cancel all booked tickets and refund the prize pool to your balance.`
+          }
+          confirmText="Cancel Lottery"
+          cancelText="Keep Lottery"
+          onConfirm={confirmCancelLottery}
+          onCancel={() => setShowCancelModal(false)}
+          error={cancelError}
+          success={cancelSuccess}
+          isConfirmDestructive={true}
+        />
+      )}
+      
+      {showDeleteModal && selectedLottery && (
+        <ConfirmDialog
+          title="Delete Lottery"
+          message={
+            deleteSuccess 
+              ? "Lottery deleted successfully!" 
+              : `Are you sure you want to delete "${selectedLottery.name || `Lottery #${selectedLottery.id}`}"?
+                 ${selectedLottery.ticketsBooked > 0 ? 
+                   `This lottery has ${selectedLottery.ticketsBooked} tickets booked. 
+                    All tickets will be preserved for reference.` : 
+                   ''}`
+          }
+          confirmText="Delete Lottery"
+          cancelText="Keep Lottery"
+          onConfirm={confirmDeleteLottery}
+          onCancel={() => setShowDeleteModal(false)}
+          error={deleteError}
+          success={deleteSuccess}
+          isConfirmDestructive={true}
+        />
+      )}
+    </div>
+  );
+};
+
+export default LotteriesTab;
