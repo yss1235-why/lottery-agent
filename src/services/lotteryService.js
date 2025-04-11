@@ -55,6 +55,27 @@ export const createLottery = async (lotteryData) => {
 };
 
 /**
+ * Update lottery status
+ * @param {string} lotteryId - Lottery ID
+ * @param {string} status - New status
+ * @returns {Promise<boolean>} Success status
+ */
+export const updateLotteryStatus = async (lotteryId, status) => {
+  try {
+    const lotteryRef = ref(database, `lotteries/${lotteryId}`);
+    await update(lotteryRef, {
+      status: status,
+      updatedAt: new Date().toISOString()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error(`Error updating lottery status to ${status}:`, error);
+    throw error;
+  }
+};
+
+/**
  * Get active lotteries
  * @param {number} limit - Maximum number of lotteries to return
  * @returns {Promise<Array>} Array of lottery objects
@@ -68,21 +89,68 @@ export const getActiveLotteries = async (limit = 10) => {
       equalTo('active')
     );
     
-    const snapshot = await get(activeQuery);
+    const upcomingQuery = query(
+      lotteriesRef,
+      orderByChild('status'),
+      equalTo('upcoming')
+    );
     
-    if (!snapshot.exists()) {
-      return [];
+    // Add a query for drawing lotteries
+    const drawingQuery = query(
+      lotteriesRef,
+      orderByChild('status'),
+      equalTo('drawing')
+    );
+    
+    // Fetch active, upcoming, and drawing lotteries
+    const [activeSnapshot, upcomingSnapshot, drawingSnapshot] = await Promise.all([
+      get(activeQuery),
+      get(upcomingQuery),
+      get(drawingQuery)
+    ]);
+    
+    const activeLotteries = [];
+    
+    // Process active lotteries
+    if (activeSnapshot.exists()) {
+      const activeData = activeSnapshot.val();
+      Object.keys(activeData).forEach(key => {
+        activeLotteries.push({
+          id: key,
+          ...activeData[key]
+        });
+      });
     }
     
-    const lotteriesData = snapshot.val();
-    const lotteries = Object.keys(lotteriesData)
-      .map(key => ({
-        id: key,
-        ...lotteriesData[key]
-      }))
-      .sort((a, b) => new Date(a.drawTime) - new Date(b.drawTime));
+    // Process upcoming lotteries
+    if (upcomingSnapshot.exists()) {
+      const upcomingData = upcomingSnapshot.val();
+      Object.keys(upcomingData).forEach(key => {
+        activeLotteries.push({
+          id: key,
+          ...upcomingData[key]
+        });
+      });
+    }
     
-    return lotteries.slice(0, limit);
+    // Process drawing lotteries
+    if (drawingSnapshot.exists()) {
+      const drawingData = drawingSnapshot.val();
+      Object.keys(drawingData).forEach(key => {
+        activeLotteries.push({
+          id: key,
+          ...drawingData[key]
+        });
+      });
+    }
+    
+    // Sort by draw time (ascending)
+    activeLotteries.sort((a, b) => {
+      return new Date(a.drawTime) - new Date(b.drawTime);
+    });
+    
+    // Limit the number of results
+    return activeLotteries.slice(0, limit);
   } catch (error) {
     console.error('Error fetching active lotteries:', error);
     throw error;
@@ -165,8 +233,8 @@ export const drawLottery = async (lotteryId, winningTicketIds) => {
     // Get lottery data
     const lottery = await getLotteryById(lotteryId);
     
-    if (lottery.status !== 'active') {
-      throw new Error('Only active lotteries can be drawn');
+    if (lottery.status !== 'drawing') {
+      throw new Error('Only lotteries in drawing state can be completed');
     }
     
     // Get all tickets for this lottery
@@ -234,7 +302,7 @@ export const drawLottery = async (lotteryId, winningTicketIds) => {
     const lotteryRef = ref(database, `lotteries/${lotteryId}`);
     const updatedLottery = {
       ...lottery,
-      status: 'completed',
+      status: 'completed', // Change from "drawing" to "completed"
       winners: winners,
       completedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -266,7 +334,7 @@ export const cancelLottery = async (lotteryId, agentId) => {
     }
     
     // Check if lottery can be cancelled
-    if (lottery.status !== 'active') {
+    if (lottery.status !== 'active' && lottery.status !== 'drawing') {
       throw new Error(`Cannot cancel lottery with status: ${lottery.status}`);
     }
     
