@@ -106,7 +106,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     return positions;
   }, []);
 
-  // Start drawing for a specific prize - Define this before it's used
+  // Start drawing for a specific prize
   const startPrizeDraw = useCallback((prizeIndex) => {
     console.log(`Starting prize draw for index ${prizeIndex}`);
     
@@ -366,6 +366,9 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     setShowResult(false);
     setFinalReveal(false);
     setAnimationPhase('countdown');
+    
+    // Reset available tickets to ensure we start with all tickets
+    setAvailableTickets([...tickets]);
     
     // Reset animation state
     animationStateRef.current = {
