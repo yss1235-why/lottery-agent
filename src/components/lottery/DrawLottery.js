@@ -10,30 +10,35 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drawInProgress, setDrawInProgress] = useState(false);
-  const [currentPrizeIndex, setCurrentPrizeIndex] = useState(-1);
-  const [selectedTickets, setSelectedTickets] = useState([]);
-  const [currentTicket, setCurrentTicket] = useState(null);
   const [error, setError] = useState(null);
   const [showResult, setShowResult] = useState(false);
   
-  // Animation phase states
+  // Pre-determined draw results for all prizes
+  const [preSelectedWinners, setPreSelectedWinners] = useState([]);
+  
+  // Current draw state
+  const [currentDrawIndex, setCurrentDrawIndex] = useState(-1);
+  const [currentPrizeIndex, setCurrentPrizeIndex] = useState(-1);
+  const [currentTicket, setCurrentTicket] = useState(null);
+  const [allWinners, setAllWinners] = useState([]);
+  
+  // Animation states
   const [animationPhase, setAnimationPhase] = useState('ready'); // ready, countdown, revealing, complete
   const [revealedChars, setRevealedChars] = useState([]);
   const [revealedPositions, setRevealedPositions] = useState([]);
-  const [_currentRevealIndex, setCurrentRevealIndex] = useState(0);
-  const [_revealSequence, setRevealSequence] = useState([]);
   const [animatingChar, setAnimatingChar] = useState(null);
   const [animatingPosition, setAnimatingPosition] = useState(null);
-  const [finalReveal, setFinalReveal] = useState(false);
-  const [availableTickets, setAvailableTickets] = useState([]);
+  const [showCharacterCountdown, setShowCharacterCountdown] = useState(false);
+  const [characterCountdown, setCharacterCountdown] = useState(3);
   
   // Countdown timer states
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownValue, setCountdownValue] = useState(3);
   
-  // Character reveal countdown
-  const [characterCountdown, setCharacterCountdown] = useState(3);
-  const [showCharacterCountdown, setShowCharacterCountdown] = useState(false);
+  // Timer references
+  const timerRef = useRef(null);
+  const characterTimerRef = useRef(null);
+  const drawSequenceTimerRef = useRef(null);
   
   // Animation timing controls (in milliseconds)
   const timings = {
@@ -41,22 +46,12 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     betweenCharacters: 500,      // Delay between characters
     finalRevealPause: 2000,      // 2 seconds pause before showing results
     betweenPrizes: 2000,         // 2 seconds pause between prize draws
-    stateUpdateBuffer: 500       // Buffer time to ensure state updates complete
   };
   
-  // Store drawn ticket IDs to ensure we don't reuse tickets
-  const drawnTicketIdsRef = useRef([]);
-  
-  // Timer references to clear them when needed
-  const timerRef = useRef(null);
-  const characterTimerRef = useRef(null);
-  const prizeTimerRef = useRef(null);
+  // Animation state tracking
   const animationStateRef = useRef({
-    ticket: null,
     sequence: [],
     currentIndex: 0,
-    revealedPositions: [],
-    revealedChars: [],
     active: false
   });
 
@@ -64,7 +59,6 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
   useEffect(() => {
     const fetchTickets = async () => {
       try {
-        // Ensure lottery exists and has an id
         if (!lottery || !lottery.id) {
           setError('Invalid lottery information');
           setLoading(false);
@@ -74,10 +68,6 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
         const ticketsData = await getLotteryTickets(lottery.id);
         const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
         setTickets(activeTickets);
-        setAvailableTickets(activeTickets);
-        
-        // Reset the drawn tickets array
-        drawnTicketIdsRef.current = [];
       } catch (error) {
         console.error('Error fetching tickets:', error);
         setError('Failed to load tickets for this lottery');
@@ -89,15 +79,57 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     fetchTickets();
     
     return () => {
-      // Clear any existing timers on unmount
+      // Clear timers on unmount
       if (timerRef.current) clearTimeout(timerRef.current);
       if (characterTimerRef.current) clearTimeout(characterTimerRef.current);
-      if (prizeTimerRef.current) clearTimeout(prizeTimerRef.current);
-      animationStateRef.current.active = false;
+      if (drawSequenceTimerRef.current) clearTimeout(drawSequenceTimerRef.current);
     };
   }, [lottery]);
 
-  // Generate a randomized reveal sequence for all characters
+  // Pre-select all winners at the start of the draw
+  const preSelectAllWinners = useCallback(() => {
+    if (!lottery || !lottery.prizes || !tickets || tickets.length === 0) {
+      return false;
+    }
+    
+    console.log(`Pre-selecting winners for ${lottery.prizes.length} prizes`);
+    
+    // Create a copy of tickets to work with
+    const availableTickets = [...tickets];
+    const selectedWinners = [];
+    
+    // Select winners for each prize, starting from the last prize (highest index)
+    for (let i = lottery.prizes.length - 1; i >= 0; i--) {
+      // Stop if no more tickets are available
+      if (availableTickets.length === 0) break;
+      
+      // Randomly select a ticket
+      const randomIndex = Math.floor(Math.random() * availableTickets.length);
+      const selectedTicket = availableTickets[randomIndex];
+      
+      // Remove the selected ticket from available tickets
+      availableTickets.splice(randomIndex, 1);
+      
+      // Add to winners with prize information
+      selectedWinners.push({
+        ticket: selectedTicket,
+        prizeIndex: i,
+        prizeName: lottery.prizes[i].name,
+        prizeValue: lottery.prizes[i].value
+      });
+      
+      console.log(`Pre-selected ticket ${selectedTicket.id} for prize index ${i}`);
+    }
+    
+    // Sort winners by prize index (descending, so highest prize is first)
+    selectedWinners.sort((a, b) => b.prizeIndex - a.prizeIndex);
+    
+    // Set the pre-selected winners
+    setPreSelectedWinners(selectedWinners);
+    return selectedWinners.length > 0;
+  }, [lottery, tickets]);
+
+  // Generate a randomized reveal sequence for characters
   const generateRevealSequence = useCallback((ticketId) => {
     if (!ticketId) return [];
     
@@ -113,109 +145,79 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     return positions;
   }, []);
 
-  // Get eligible tickets that haven't been drawn yet
-  const getEligibleTickets = useCallback(() => {
-    return tickets.filter(ticket => 
-      !drawnTicketIdsRef.current.includes(ticket.id)
-    );
-  }, [tickets]);
+  // Start the prize reveal sequence
+  const startPrizeRevealSequence = useCallback(() => {
+    // Begin with the first winner in the pre-selected list (highest prize)
+    if (preSelectedWinners.length === 0) {
+      console.error("No pre-selected winners available");
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
+    }
+    
+    setCurrentDrawIndex(0);
+    revealNextPrize(0);
+  }, [preSelectedWinners]);
 
-  // Start drawing for a specific prize
-  const startPrizeDraw = useCallback((prizeIndex) => {
-    console.log(`Starting prize draw for index ${prizeIndex}`);
-    
-    // Get tickets that haven't been drawn yet
-    const eligibleTickets = getEligibleTickets();
-    
-    if (!eligibleTickets || eligibleTickets.length === 0) {
-      console.error(`No eligible tickets available for prize #${prizeIndex + 1}`);
-      
-      // Move to the next prize if we still have more prizes to draw
-      if (prizeIndex > 0) {
-        console.log(`Moving to next prize, index: ${prizeIndex - 1}`);
-        prizeTimerRef.current = setTimeout(() => {
-          startPrizeDraw(prizeIndex - 1);
-        }, timings.betweenPrizes);
-        return true;
-      } else {
-        // If no more prizes, show the final results
-        setFinalReveal(true);
-        setAnimationPhase('complete');
-        setShowResult(true);
-        return false;
-      }
+  // Reveal the next prize in the sequence
+  const revealNextPrize = useCallback((index) => {
+    // Check if we've reached the end of the winners
+    if (index >= preSelectedWinners.length) {
+      console.log("All prizes revealed, showing final results");
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
     }
     
-    // Select a random ticket for this prize
-    const randomIndex = Math.floor(Math.random() * eligibleTickets.length);
-    const selectedTicket = eligibleTickets[randomIndex];
+    const currentWinner = preSelectedWinners[index];
+    const ticket = currentWinner.ticket;
+    const prizeIndex = currentWinner.prizeIndex;
     
-    // Guard against null tickets
-    if (!selectedTicket || !selectedTicket.id) {
-      setError('Invalid ticket selected. Please try again.');
-      return false;
-    }
+    console.log(`Revealing prize ${prizeIndex}: ${currentWinner.prizeName} for ticket ${ticket.id}`);
     
-    console.log(`Selected ticket: ${selectedTicket.id} for prize ${prizeIndex}`);
+    // Set current prize and ticket
+    setCurrentPrizeIndex(prizeIndex);
+    setCurrentTicket(ticket);
     
-    // Add to drawn tickets list
-    drawnTicketIdsRef.current.push(selectedTicket.id);
+    // Generate character reveal sequence
+    const sequence = generateRevealSequence(ticket.id);
     
-    // Generate reveal sequence based on the ticket ID
-    const sequence = generateRevealSequence(selectedTicket.id);
-    
-    // Reset animation states
-    setAnimationPhase('revealing');
-    setRevealedChars(Array(selectedTicket.id.length).fill(null));
+    // Reset reveal state
+    setRevealedChars(Array(ticket.id.length).fill(null));
     setRevealedPositions([]);
-    setCurrentRevealIndex(0);
     setAnimatingChar(null);
     setAnimatingPosition(null);
     setShowCharacterCountdown(false);
     
-    // Set current ticket and prize index
-    setCurrentTicket(selectedTicket);
-    setCurrentPrizeIndex(prizeIndex);
+    // Set animation phase
+    setAnimationPhase('revealing');
     
-    // Set the reveal sequence
-    setRevealSequence(sequence);
-    
-    // Update animation state
+    // Update animation state reference
     animationStateRef.current = {
-      ticket: selectedTicket,
       sequence,
       currentIndex: 0,
-      revealedPositions: [],
-      revealedChars: Array(selectedTicket.id.length).fill(null),
       active: true
     };
     
-    // Start the character reveal sequence
+    // Start character reveal
     setTimeout(() => {
-      animateCharacterReveals();
+      revealNextCharacter(0, ticket, sequence);
     }, 500);
-    
-    return true;
-  }, [generateRevealSequence, getEligibleTickets, timings.betweenPrizes]);
+  }, [preSelectedWinners, generateRevealSequence]);
 
-  // The main character reveal animation driver
-  const animateCharacterReveals = useCallback(() => {
-    // Stop if animation is no longer active
-    if (!animationStateRef.current.active) return;
-    
-    const { ticket, sequence, currentIndex } = animationStateRef.current;
-    
-    // If all characters are revealed, move to completion
-    if (currentIndex >= sequence.length) {
-      completeTicketReveal();
+  // Reveal the next character in the ticket ID
+  const revealNextCharacter = useCallback((charIndex, ticket, sequence) => {
+    // Check if we've finished revealing all characters
+    if (charIndex >= sequence.length || !animationStateRef.current.active) {
+      finishPrizeReveal();
       return;
     }
     
     // Get the position and character to reveal
-    const positionToReveal = sequence[currentIndex];
+    const positionToReveal = sequence[charIndex];
     const charToReveal = ticket.id.charAt(positionToReveal);
     
-    // Set the animating character and position
+    // Set the character being animated
     setAnimatingPosition(positionToReveal);
     setAnimatingChar(charToReveal);
     
@@ -223,98 +225,78 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     setShowCharacterCountdown(true);
     setCharacterCountdown(3);
     
-    // Schedule countdown decrement
-    const countdownDriver = (count) => {
+    // Countdown function
+    const runCountdown = (count) => {
       if (!animationStateRef.current.active) return;
       
       if (count > 0) {
         // Continue countdown
         setCharacterCountdown(count - 1);
         
-        // Schedule next countdown decrement
+        // Schedule next countdown
         characterTimerRef.current = setTimeout(() => {
-          countdownDriver(count - 1);
+          runCountdown(count - 1);
         }, timings.characterCountdown);
       } else {
-        // Countdown complete, reveal the character
+        // Reveal the character
+        setRevealedChars(prev => {
+          const updated = [...prev];
+          updated[positionToReveal] = charToReveal;
+          return updated;
+        });
         
-        // Update revealed characters and positions arrays
-        const newRevealedChars = [...animationStateRef.current.revealedChars];
-        newRevealedChars[positionToReveal] = charToReveal;
-        
-        setRevealedChars(newRevealedChars);
         setRevealedPositions(prev => [...prev, positionToReveal]);
         setShowCharacterCountdown(false);
         
-        // Update animation state
-        animationStateRef.current.revealedChars = newRevealedChars;
-        animationStateRef.current.revealedPositions = [...animationStateRef.current.revealedPositions, positionToReveal];
-        animationStateRef.current.currentIndex = currentIndex + 1;
-        
-        // Schedule next character reveal after a delay
+        // Move to next character
         characterTimerRef.current = setTimeout(() => {
-          animateCharacterReveals();
+          revealNextCharacter(charIndex + 1, ticket, sequence);
         }, timings.betweenCharacters);
       }
     };
     
     // Start countdown
-    countdownDriver(3);
+    runCountdown(3);
   }, [timings.betweenCharacters, timings.characterCountdown]);
 
-  // Complete ticket reveal and prepare for next prize if available
-  const completeTicketReveal = useCallback(() => {
-    // Deactivate current animation
-    animationStateRef.current.active = false;
+  // Finish revealing the current prize and prepare for the next one
+  const finishPrizeReveal = useCallback(() => {
+    if (currentDrawIndex < 0 || currentDrawIndex >= preSelectedWinners.length) return;
     
-    if (timerRef.current) clearTimeout(timerRef.current);
+    // Get current winner
+    const currentWinner = preSelectedWinners[currentDrawIndex];
+    const ticket = currentWinner.ticket;
     
-    const { ticket } = animationStateRef.current;
+    // Add to the completed winners list
+    setAllWinners(prev => [...prev, {
+      id: ticket.id,
+      number: ticket.number,
+      playerName: ticket.playerName,
+      phoneNumber: ticket.phoneNumber,
+      gameId: ticket.gameId,
+      serverId: ticket.serverId,
+      prizeIndex: currentWinner.prizeIndex,
+      prizeName: currentWinner.prizeName,
+      prizeValue: currentWinner.prizeValue
+    }]);
     
-    // Guard against null ticket
-    if (!ticket) {
-      setFinalReveal(true);
-      setAnimationPhase('complete');
-      setShowResult(true);
-      return;
-    }
-    
-    // Short pause before completing the reveal
-    timerRef.current = setTimeout(() => {
-      // Add the current ticket to selected tickets
-      setSelectedTickets(prev => [...prev, {
-        ...ticket,
-        prizeIndex: currentPrizeIndex,
-        prizeName: lottery.prizes && lottery.prizes[currentPrizeIndex] ? lottery.prizes[currentPrizeIndex].name : 'Unknown Prize',
-        prizeValue: lottery.prizes && lottery.prizes[currentPrizeIndex] ? lottery.prizes[currentPrizeIndex].value : 0
-      }]);
+    // Pause before moving to the next prize
+    drawSequenceTimerRef.current = setTimeout(() => {
+      const nextIndex = currentDrawIndex + 1;
       
-      // Check if we have more prizes to draw
-      const nextPrizeIndex = currentPrizeIndex - 1;
-      console.log(`Current prize index: ${currentPrizeIndex}, Next prize index: ${nextPrizeIndex}`);
-      
-      if (nextPrizeIndex >= 0 && lottery.prizes && lottery.prizes[nextPrizeIndex]) {
-        console.log(`Will move to next prize index: ${nextPrizeIndex} after delay`);
-        
-        // Reset animation for next prize - with added buffer for state updates
-        prizeTimerRef.current = setTimeout(() => {
-          // This extra setTimeout ensures state updates have completed
-          setTimeout(() => {
-            console.log(`Now starting next prize draw for index: ${nextPrizeIndex}`);
-            startPrizeDraw(nextPrizeIndex);
-          }, timings.stateUpdateBuffer);
-        }, timings.betweenPrizes);
+      if (nextIndex < preSelectedWinners.length) {
+        // Move to the next prize
+        setCurrentDrawIndex(nextIndex);
+        revealNextPrize(nextIndex);
       } else {
-        console.log("No more prizes to draw, showing final results");
-        // No more prizes to draw
-        setFinalReveal(true);
+        // End of prizes
         setAnimationPhase('complete');
         setShowResult(true);
       }
-    }, timings.finalRevealPause);
-  }, [currentPrizeIndex, lottery.prizes, startPrizeDraw, timings.betweenPrizes, timings.finalRevealPause, timings.stateUpdateBuffer]);
+    }, timings.betweenPrizes);
+  }, [currentDrawIndex, preSelectedWinners, revealNextPrize, timings.betweenPrizes]);
 
-  // Handle countdown animation
+  // Handle countdown animation for draw start
   useEffect(() => {
     if (!lottery || !lottery.prizes) return;
     
@@ -326,16 +308,9 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       return () => clearTimeout(timerRef.current);
     } else if (showCountdown && countdownValue === 0) {
       setShowCountdown(false);
-      
-      // Start with the highest prize (highest index)
-      const highestPrizeIndex = lottery.prizes.length - 1;
-      console.log(`Starting with highest prize index: ${highestPrizeIndex}`);
-      const success = startPrizeDraw(highestPrizeIndex);
-      if (!success) {
-        setDrawInProgress(false);
-      }
+      startPrizeRevealSequence();
     }
-  }, [showCountdown, countdownValue, lottery, startPrizeDraw]);
+  }, [showCountdown, countdownValue, lottery, startPrizeRevealSequence]);
 
   // Complete the drawing process
   const completeDrawProcess = useCallback(async (winningTickets) => {
@@ -351,20 +326,18 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       
       // Save the draw results to the database
       await drawLottery(lottery.id, winningTicketIds);
-      
-      // No auto-close - require manual closing
     } catch (error) {
       console.error('Error completing draw:', error);
       setError('Failed to record the lottery draw. The winners have been selected, but there was an error saving the results.');
     }
   }, [lottery]);
   
-  // Effect to handle draw completion
+  // Handle draw completion when all winners are revealed
   useEffect(() => {
-    if (animationPhase === 'complete' && finalReveal && selectedTickets.length > 0) {
-      completeDrawProcess(selectedTickets);
+    if (animationPhase === 'complete' && showResult && allWinners.length > 0) {
+      completeDrawProcess(allWinners);
     }
-  }, [animationPhase, finalReveal, selectedTickets, completeDrawProcess]);
+  }, [animationPhase, showResult, allWinners, completeDrawProcess]);
 
   // Main draw function
   const startDraw = async () => {
@@ -377,6 +350,12 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       setError('No prizes defined for this lottery');
       return;
     }
+    
+    // Check if we have enough tickets for prizes
+    if (tickets.length < lottery.prizes.length) {
+      setError(`Not enough tickets for all prizes. You have ${tickets.length} tickets but need at least ${lottery.prizes.length}.`);
+      return;
+    }
 
     // Update lottery status to "drawing" in the database
     try {
@@ -387,26 +366,23 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       return;
     }
     
+    // Reset state
     setDrawInProgress(true);
-    setSelectedTickets([]);
+    setAllWinners([]);
+    setCurrentDrawIndex(-1);
+    setCurrentPrizeIndex(-1);
+    setCurrentTicket(null);
     setError(null);
     setShowResult(false);
-    setFinalReveal(false);
     setAnimationPhase('countdown');
     
-    // Reset available tickets and drawn tickets list
-    setAvailableTickets([...tickets]);
-    drawnTicketIdsRef.current = [];
-    
-    // Reset animation state
-    animationStateRef.current = {
-      ticket: null,
-      sequence: [],
-      currentIndex: 0,
-      revealedPositions: [],
-      revealedChars: [],
-      active: false
-    };
+    // Pre-determine all winners
+    const success = preSelectAllWinners();
+    if (!success) {
+      setError('Failed to select winners. Please try again.');
+      setDrawInProgress(false);
+      return;
+    }
     
     // Start the countdown animation
     setShowCountdown(true);
@@ -426,7 +402,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       const isAnimating = animatingPosition === i;
       
       if (isRevealed) {
-        // Character is fully revealed and positioned
+        // Character is fully revealed
         result.push(
           <div key={i} className="char-box revealed">
             {revealedChars[i]}
@@ -483,7 +459,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     );
   };
 
-  // Render different animation stage labels
+  // Render animation stage label
   const renderAnimationStageLabel = () => {
     switch (animationPhase) {
       case 'revealing':
@@ -493,12 +469,12 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     }
   };
 
-  // Render winners list when done
+  // Render winners list
   const renderWinners = () => {
-    if (!selectedTickets || selectedTickets.length === 0) return null;
+    if (!allWinners || allWinners.length === 0) return null;
     
     // Sort winners by prize index (ascending - bigger prizes first)
-    const sortedWinners = [...selectedTickets].sort((a, b) => a.prizeIndex - b.prizeIndex);
+    const sortedWinners = [...allWinners].sort((a, b) => a.prizeIndex - b.prizeIndex);
     
     return (
       <div className="winners-list">
@@ -524,7 +500,6 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
           </div>
         ))}
         
-        {/* Add close button */}
         <button className="results-close-button" onClick={onDrawComplete}>
           Close
         </button>
@@ -532,7 +507,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     );
   };
 
-  // Render the current prize being drawn
+  // Render current prize
   const renderCurrentPrize = () => {
     if (currentPrizeIndex === -1 || !lottery || !lottery.prizes) return null;
     
@@ -548,9 +523,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     );
   };
 
-  // Main rendering logic follows...
-  // (The rest of the component's rendering code stays the same)
-
+  // Loading state
   if (loading) {
     return (
       <div className="draw-lottery-modal">
@@ -566,7 +539,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     );
   }
 
-  // Guard against null lottery object
+  // Invalid lottery
   if (!lottery) {
     return (
       <div className="draw-lottery-modal">
@@ -586,6 +559,7 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     );
   }
 
+  // Main component render
   return (
     <div className="draw-lottery-modal">
       <div className="modal-content">
