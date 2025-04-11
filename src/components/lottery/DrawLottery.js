@@ -1,4 +1,26 @@
-// src/components/lottery/DrawLottery.js
+// Fetch tickets when component mounts
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        if (!lottery || !lottery.id) {
+          setError('Invalid lottery information');
+          setLoading(false);
+          return;
+        }
+        
+        const ticketsData = await getLotteryTickets(lottery.id);
+        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
+        setTickets(activeTickets);
+      } catch (error) {
+        console.error('Error fetching tickets:', error);
+        setError('Failed to load tickets for this lottery');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTickets();
+  }, [lottery]);// src/components/lottery/DrawLottery.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { drawLottery, updateLotteryStatus } from '../../services/lotteryService';
 import { getLotteryTickets } from '../../services/ticketService';
@@ -62,36 +84,18 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     preSelectedWinners: [] // Store pre-selected winners to avoid stale closures
   });
 
-  // Fetch tickets when component mounts
+  // Clean up function that runs on unmount
   useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        if (!lottery || !lottery.id) {
-          setError('Invalid lottery information');
-          setLoading(false);
-          return;
-        }
-        
-        const ticketsData = await getLotteryTickets(lottery.id);
-        const activeTickets = ticketsData.filter(ticket => ticket.booked && ticket.status === 'active');
-        setTickets(activeTickets);
-      } catch (error) {
-        console.error('Error fetching tickets:', error);
-        setError('Failed to load tickets for this lottery');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchTickets();
-    
     return () => {
-      // Clear timers on unmount
+      // Clean up all timers
       if (timerRef.current) clearTimeout(timerRef.current);
       if (characterTimerRef.current) clearTimeout(characterTimerRef.current);
       if (drawSequenceTimerRef.current) clearTimeout(drawSequenceTimerRef.current);
+      
+      // Mark animation as inactive to prevent further updates
+      animationStateRef.current.active = false;
     };
-  }, [lottery]);
+  }, []);
 
   // Pre-select all winners at the start of the draw
   const preSelectAllWinners = useCallback(() => {
@@ -361,24 +365,41 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
     }
     
     // Get current winner
-    const currentWinner = preSelectedWinners[drawIndex];
+    const currentWinner = winners[drawIndex];
+    if (!currentWinner) {
+      console.error(`No winner found at index ${drawIndex}`);
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
+    }
+    
     const ticket = currentWinner.ticket;
+    if (!ticket) {
+      console.error(`Winner at index ${drawIndex} has no ticket`);
+      setAnimationPhase('complete');
+      setShowResult(true);
+      return;
+    }
     
     console.log(`Adding winner to results: Ticket ${ticket.id} for prize ${currentWinner.prizeName}`);
     
-    // Add to the completed winners list
+    // Add to the completed winners list - using a callback to ensure we're working with the latest state
     setAllWinners(prev => {
-      const updated = [...prev, {
+      const newWinner = {
         id: ticket.id,
         number: ticket.number,
-        playerName: ticket.playerName,
-        phoneNumber: ticket.phoneNumber,
-        gameId: ticket.gameId,
-        serverId: ticket.serverId,
+        playerName: ticket.playerName || 'Unknown Player',
+        phoneNumber: ticket.phoneNumber || 'Unknown',
         prizeIndex: currentWinner.prizeIndex,
-        prizeName: currentWinner.prizeName,
+        prizeName: currentWinner.prizeName || 'Prize',
         prizeValue: currentWinner.prizeValue
-      }];
+      };
+      
+      // If the ticket has gameId or serverId, add them
+      if (ticket.gameId) newWinner.gameId = ticket.gameId;
+      if (ticket.serverId) newWinner.serverId = ticket.serverId;
+      
+      const updated = [...prev, newWinner];
       console.log(`Updated winners list, now contains ${updated.length} winners`);
       return updated;
     });
@@ -391,15 +412,31 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
       clearTimeout(drawSequenceTimerRef.current);
     }
     
+    // Create a local copy of the winners and current index to use in timeout
+    const currentDrawIndexCopy = drawIndex;
+    const winnersCopy = [...winners];
+    
     drawSequenceTimerRef.current = setTimeout(() => {
-      const nextIndex = drawIndex + 1;
+      // Verify component is still mounted and animation is active
+      if (!animationStateRef.current.active) {
+        console.log("Animation is no longer active, skipping next prize reveal");
+        return;
+      }
+      
+      const nextIndex = currentDrawIndexCopy + 1;
       console.log(`Moving to next prize at index ${nextIndex}`);
       
-      if (nextIndex < preSelectedWinners.length) {
-        // Move to the next prize - update both the React state and our ref
-        setCurrentDrawIndex(nextIndex);
-        animationStateRef.current.currentDrawIndex = nextIndex;
-        revealNextPrize(nextIndex);
+      if (nextIndex < winnersCopy.length) {
+        try {
+          // Move to the next prize - update both the React state and our ref
+          setCurrentDrawIndex(nextIndex);
+          animationStateRef.current.currentDrawIndex = nextIndex;
+          revealNextPrize(nextIndex);
+        } catch (error) {
+          console.error("Error advancing to next prize:", error);
+          setAnimationPhase('complete');
+          setShowResult(true);
+        }
       } else {
         // End of prizes
         console.log("No more prizes to reveal, completing the draw");
@@ -427,14 +464,32 @@ const DrawLottery = ({ lottery, onClose, onDrawComplete }) => {
 
   // Complete the drawing process
   const completeDrawProcess = useCallback(async (winningTickets) => {
-    if (!lottery || !lottery.id || winningTickets.length === 0) {
-      setError('Invalid lottery or no winners selected');
+    if (!lottery || !lottery.id) {
+      setError('Invalid lottery data');
+      return;
+    }
+    
+    if (!winningTickets || !Array.isArray(winningTickets) || winningTickets.length === 0) {
+      setError('No winners selected');
       return;
     }
     
     try {
-      // Extract ticket IDs
-      const winningTicketIds = winningTickets.map(ticket => ticket.id);
+      // Extract ticket IDs - make this more robust
+      const winningTicketIds = winningTickets.map(ticket => {
+        // Check if ticket is valid and has an id
+        if (!ticket || !ticket.id) {
+          console.error('Invalid winning ticket:', ticket);
+          return null;
+        }
+        return ticket.id;
+      }).filter(id => id !== null); // Remove any null entries
+      
+      if (winningTicketIds.length === 0) {
+        setError('No valid winning ticket IDs found');
+        return;
+      }
+      
       console.log(`Saving winners to database: ${winningTicketIds.join(', ')}`);
       
       // Save the draw results to the database
